@@ -177,7 +177,13 @@ def get_filtered_stats(
 
     n_rows_total = df.shape[0]
 
-    filtered_df = df[[row_filter(row, df) for i, row in df.iterrows()]]
+    filtered_df = df.copy()
+    if n_rows_total > 0:
+        if isinstance(row_filter, tuple):  # apply filters sequentially
+            for row_filter_ in row_filter:
+                filtered_df = filtered_df[[row_filter_(row, filtered_df) for i, row in filtered_df.iterrows()]]
+        else:
+            filtered_df = filtered_df[[row_filter(row, filtered_df) for i, row in filtered_df.iterrows()]]
 
     n_rows_kept = filtered_df.shape[0]
     n_rows_discarded = n_rows_total - n_rows_kept
@@ -324,34 +330,51 @@ def compute_summary_statistics(
             "cooling", REAL_OR_INTEGER_VALUED_COLUMNS_COOLING,
             target_baseline_method)
 
-    very_cold_cold_df = metrics_df[[
-        (cz is not None) and "Very-Cold/Cold" in cz
-        for cz in metrics_df["climate_zone"]
+    # filter metrics_df for all thermostats with too many missing days.
+    metrics_df = metrics_df[[
+        (
+            float(row['n_days_insufficient_data']) /
+            row['n_days_in_inputfile_date_range']
+        ) <= 0.05
+        for i, row in metrics_df.iterrows()
     ]]
-    mixed_humid_df = metrics_df[[
-        (cz is not None) and "Mixed-Humid" in cz
-        for cz in metrics_df["climate_zone"]
-    ]]
-    mixed_dry_hot_dry_df = metrics_df[[
-        (cz is not None) and "Mixed-Dry/Hot-Dry" in cz
-        for cz in metrics_df["climate_zone"]
-    ]]
-    hot_humid_df = metrics_df[[
-        (cz is not None) and "Hot-Humid" in cz
-        for cz in metrics_df["climate_zone"]
-    ]]
-    marine_df = metrics_df[[
-        (cz is not None) and "Marine" in cz
-        for cz in metrics_df["climate_zone"]
-    ]]
+
+    if not metrics_df.empty:
+        very_cold_cold_df = metrics_df[[
+            (cz is not None) and "Very-Cold/Cold" in cz
+            for cz in metrics_df["climate_zone"]
+        ]]
+        mixed_humid_df = metrics_df[[
+            (cz is not None) and "Mixed-Humid" in cz
+            for cz in metrics_df["climate_zone"]
+        ]]
+        mixed_dry_hot_dry_df = metrics_df[[
+            (cz is not None) and "Mixed-Dry/Hot-Dry" in cz
+            for cz in metrics_df["climate_zone"]
+        ]]
+        hot_humid_df = metrics_df[[
+            (cz is not None) and "Hot-Humid" in cz
+            for cz in metrics_df["climate_zone"]
+        ]]
+        marine_df = metrics_df[[
+            (cz is not None) and "Marine" in cz
+            for cz in metrics_df["climate_zone"]
+        ]]
+    else:
+        # preserves column headings
+        very_cold_cold_df = metrics_df
+        mixed_humid_df = metrics_df
+        mixed_dry_hot_dry_df = metrics_df
+        hot_humid_df = metrics_df
+        marine_df = metrics_df
 
     filter_0 = _identity_filter
     filter_1_heating = _combine_filters([_tau_filter_heating])
     filter_1_cooling = _combine_filters([_tau_filter_cooling])
     filter_2_heating = _combine_filters([_tau_filter_heating, _cvrmse_filter_heating])
     filter_2_cooling = _combine_filters([_tau_filter_cooling, _cvrmse_filter_cooling])
-    filter_3_heating = _combine_filters([_tau_filter_heating, _cvrmse_filter_heating, _savings_filter_p01_heating])
-    filter_3_cooling = _combine_filters([_tau_filter_cooling, _cvrmse_filter_cooling, _savings_filter_p01_cooling])
+    filter_3_heating = (_combine_filters([_tau_filter_heating, _cvrmse_filter_heating]), _savings_filter_p01_heating)  # tuple indicates filters should be applied sequentially
+    filter_3_cooling = (_combine_filters([_tau_filter_cooling, _cvrmse_filter_cooling]), _savings_filter_p01_cooling)
 
     if advanced_filtering:
         stats = list(chain.from_iterable([
@@ -603,7 +626,7 @@ def compute_summary_statistics(
     return stats
 
 
-def summary_statistics_to_csv(stats, filepath, product_id):
+def summary_statistics_to_csv(stats, filepath, product_id=None):
     """ Write metric statistics to CSV file.
 
     Parameters
@@ -612,7 +635,7 @@ def summary_statistics_to_csv(stats, filepath, product_id):
         List of outputs from thermostat.stats.compute_summary_statistics()
     filepath : str
         Filepath at which to save the suppary statistics
-    product_id : str
+    product_id : str, default None
         A combination of the connected thermostat service plus one or more
         connected thermostat device models that comprises the data set.
 
@@ -622,6 +645,13 @@ def summary_statistics_to_csv(stats, filepath, product_id):
         A pandas dataframe containing the output data.
 
     """
+
+    if product_id is None:
+        warn(
+            "product_id not provided;"
+            " continuing to write CSV without product_id."
+        )
+        product_id = "No product_id given"
 
     columns = [
         "label",
