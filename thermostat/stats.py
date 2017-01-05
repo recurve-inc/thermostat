@@ -181,9 +181,11 @@ def get_filtered_stats(
     if n_rows_total > 0:
         if isinstance(row_filter, tuple):  # apply filters sequentially
             for row_filter_ in row_filter:
-                filtered_df = filtered_df[[row_filter_(row, filtered_df) for i, row in filtered_df.iterrows()]]
+                if not filtered_df.empty:
+                    filtered_df = filtered_df[[row_filter_(row, filtered_df) for i, row in filtered_df.iterrows()]]
         else:
-            filtered_df = filtered_df[[row_filter(row, filtered_df) for i, row in filtered_df.iterrows()]]
+            if not filtered_df.empty:
+                filtered_df = filtered_df[[row_filter(row, filtered_df) for i, row in filtered_df.iterrows()]]
 
     n_rows_kept = filtered_df.shape[0]
     n_rows_discarded = n_rows_total - n_rows_kept
@@ -331,13 +333,15 @@ def compute_summary_statistics(
             target_baseline_method)
 
     # filter metrics_df for all thermostats with too many missing days.
-    metrics_df = metrics_df[[
-        (
-            float(row['n_days_insufficient_data']) /
-            row['n_days_in_inputfile_date_range']
-        ) <= 0.05
-        for i, row in metrics_df.iterrows()
-    ]]
+
+    if not metrics_df.empty:
+        metrics_df = metrics_df[[
+            (
+                float(row['n_days_insufficient_data']) /
+                row['n_days_in_inputfile_date_range']
+            ) <= 0.05
+            for i, row in metrics_df.iterrows()
+        ]]
 
     if not metrics_df.empty:
         very_cold_cold_df = metrics_df[[
@@ -381,7 +385,7 @@ def compute_summary_statistics(
             heating_stats(metrics_df, filter_0, "all_no_filter"),
             cooling_stats(metrics_df, filter_0, "all_no_filter"),
             heating_stats(very_cold_cold_df, filter_0, "very-cold_cold_no_filter"),
-            cooling_stats(very_cold_cold_df, filter_0, "very-cold_cold"),
+            cooling_stats(very_cold_cold_df, filter_0, "very-cold_cold_no_filter"),
             heating_stats(mixed_humid_df, filter_0, "mixed-humid_no_filter"),
             cooling_stats(mixed_humid_df, filter_0, "mixed-humid_no_filter"),
             heating_stats(mixed_dry_hot_dry_df, filter_0, "mixed-dry_hot-dry_no_filter"),
@@ -435,7 +439,7 @@ def compute_summary_statistics(
             heating_stats(metrics_df, filter_0, "all_no_filter"),
             cooling_stats(metrics_df, filter_0, "all_no_filter"),
             heating_stats(very_cold_cold_df, filter_0, "very-cold_cold_no_filter"),
-            cooling_stats(very_cold_cold_df, filter_0, "very-cold_cold"),
+            cooling_stats(very_cold_cold_df, filter_0, "very-cold_cold_no_filter"),
             heating_stats(mixed_humid_df, filter_0, "mixed-humid_no_filter"),
             cooling_stats(mixed_humid_df, filter_0, "mixed-humid_no_filter"),
             heating_stats(mixed_dry_hot_dry_df, filter_0, "mixed-dry_hot-dry_no_filter"),
