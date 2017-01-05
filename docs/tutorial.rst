@@ -259,6 +259,9 @@ data set.
     stats_filepath = os.path.join(data_dir, "thermostat_example_stats.csv")
     stats_df = summary_statistics_to_csv(stats, stats_filepath, product_id)
 
+    # or the product_id can be left off entirely
+    # stats_df = summary_statistics_to_csv(stats, stats_filepath)
+
     # or with advanced filter outputs
     # stats_advanced_filepath = os.path.join(data_dir, "thermostat_example_stats_advanced.csv")
     # stats_advanced_df = summary_statistics_to_csv(stats_advanced, stats_advanced_filepath, product_id)

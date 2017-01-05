@@ -116,6 +116,8 @@ class Thermostat(object):
 
         self.validate()
 
+        self.days_with_missing_data = self.find_days_with_missing_data()
+
     def validate(self):
         self._validate_heating()
         self._validate_cooling()
@@ -191,6 +193,36 @@ class Thermostat(object):
                       " called for equipment_type {}".format(function_name, self.equipment_type)
             raise ValueError(message)
 
+    def find_days_with_missing_data(self):
+
+        # enough temperature_in
+        if self.temperature_in.empty:
+            temp_in_missing = True
+        else:
+            temp_in_missing = self.temperature_in.groupby(
+                self.temperature_in.index.date
+            ).apply(lambda x: x.isnull().sum() > 2)
+
+        # enough temperature_out
+        if self.temperature_out.empty:
+            temp_out_missing = True
+        else:
+            temp_out_missing = self.temperature_out.groupby(
+                self.temperature_out.index.date
+            ).apply(lambda x: x.isnull().sum() > 2)
+
+        too_much_missing = temp_in_missing | temp_out_missing
+
+        if self.heat_runtime is not None:
+            heat_runtime_missing = self.heat_runtime.isnull()
+            too_much_missing |= heat_runtime_missing
+
+        if self.cool_runtime is not None:
+            cool_runtime_missing = self.cool_runtime.isnull()
+            too_much_missing |= cool_runtime_missing
+
+        return too_much_missing
+
     def get_core_heating_days(self, method="entire_dataset",
             min_minutes_heating=30, max_minutes_cooling=0):
         """ Determine core heating days from data associated with this thermostat
@@ -243,16 +275,7 @@ class Thermostat(object):
 
         meets_thresholds = meets_heating_thresholds & meets_cooling_thresholds
 
-        # enough temperature_in
-        enough_temp_in = \
-                self.temperature_in.groupby(self.temperature_in.index.date) \
-                .apply(lambda x: x.isnull().sum() <= 2)
-
-        enough_temp_out = \
-                self.temperature_out.groupby(self.temperature_out.index.date) \
-                .apply(lambda x: x.isnull().sum() <= 2)
-
-        meets_thresholds &= enough_temp_in & enough_temp_out
+        meets_thresholds &= ~self.days_with_missing_data
 
         data_start_date = np.datetime64(self.heat_runtime.index[0])
         data_end_date = np.datetime64(self.heat_runtime.index[-1])
@@ -352,16 +375,7 @@ class Thermostat(object):
         meets_cooling_thresholds = self.cool_runtime >= min_minutes_cooling
         meets_thresholds = meets_heating_thresholds & meets_cooling_thresholds
 
-        # enough temperature_in
-        enough_temp_in = \
-                self.temperature_in.groupby(self.temperature_in.index.date) \
-                .apply(lambda x: x.isnull().sum() <= 2)
-
-        enough_temp_out = \
-                self.temperature_out.groupby(self.temperature_out.index.date) \
-                .apply(lambda x: x.isnull().sum() <= 2)
-
-        meets_thresholds &= enough_temp_in & enough_temp_out
+        meets_thresholds &= ~self.days_with_missing_data
 
         if method == "year_end_to_end":
             start_year = data_start_date.item().year
@@ -550,21 +564,17 @@ class Thermostat(object):
 
         if self.equipment_type in self.HEATING_EQUIPMENT_TYPES:
             has_heating = self.heat_runtime > 0
-            null_heating = pd.isnull(self.heat_runtime)
         else:
             has_heating = False
-            null_heating = False # shouldn't be counted, so False, not True
 
         if self.equipment_type in self.COOLING_EQUIPMENT_TYPES:
             has_cooling = self.cool_runtime > 0
-            null_cooling = pd.isnull(self.cool_runtime)
         else:
             has_cooling = False
-            null_cooling = False # shouldn't be counted, so False, not True
 
 
         n_both = (in_range & has_heating & has_cooling).sum()
-        n_days_insufficient = (in_range & (null_heating | null_cooling)).sum()
+        n_days_insufficient = self.days_with_missing_data.sum()
         return n_both, n_days_insufficient
 
     def get_core_day_set_n_days(self, core_day_set):
@@ -1305,7 +1315,6 @@ class Thermostat(object):
                     baseline_daily_mean_core_day_runtime_baseline_regional = None
                     baseline_total_core_day_runtime_baseline_regional = None
                     _daily_mean_core_day_demand_baseline_baseline_regional = None
-
 
                 n_days_both, n_days_insufficient_data = self.get_ignored_days(core_heating_day_set)
                 n_core_heating_days = self.get_core_day_set_n_days(core_heating_day_set)
