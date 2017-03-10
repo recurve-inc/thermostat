@@ -519,7 +519,7 @@ class Thermostat(object):
             bottom = self.RESISTANCE_HEAT_UTILIZATION_BINS_MIN_TEMP
             top = self.RESISTANCE_HEAT_UTILIZATION_BINS_MAX_TEMP
             step = self.RESISTANCE_HEAT_UTILIZATION_BIN_TEMP_WIDTH
-            temperature_bins = [(i, i+step) for i in range(bottom, top, step)]
+            temperature_bins = ((t, t+step) for t in range(bottom, top, step))
             for low_temp, high_temp in temperature_bins:
                 temp_low_enough_daily = temp_out_daily < high_temp
                 temp_high_enough_daily = temp_out_daily >= low_temp
@@ -1381,13 +1381,14 @@ class Thermostat(object):
                     bottom = self.RESISTANCE_HEAT_UTILIZATION_BINS_MIN_TEMP
                     top = self.RESISTANCE_HEAT_UTILIZATION_BINS_MAX_TEMP
                     step = self.RESISTANCE_HEAT_UTILIZATION_BIN_TEMP_WIDTH
+                    temperature_bins = ((t, t+step) for t in range(bottom, top, step))
 
                     if rhus is None:
-                        for low, high in [(i, i+step) for i in range(bottom, top, step)]:
+                        for low, high in temperature_bins:
                             column = "rhu_{:02d}F_to_{:02d}F".format(low, high)
                             additional_outputs[column] = None
                     else:
-                        for rhu, (low, high) in zip(rhus, [(i, i+step) for i in range(bottom, top, step)]):
+                        for rhu, (low, high) in zip(rhus, temperature_bins):
                             column = "rhu_{:02d}F_to_{:02d}F".format(low, high)
                             additional_outputs[column] = rhu
 
